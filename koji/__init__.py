@@ -1923,6 +1923,8 @@ def read_config(profile_name, user_config=None):
         'debug_xmlrpc': False,
         'pyver': None,
         'plugin_paths': None,
+        'user': None,
+        'password': None,
     }
 
     result = config_defaults.copy()

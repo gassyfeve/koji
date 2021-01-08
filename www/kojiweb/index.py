@@ -117,6 +117,45 @@ def _getUserCookie(environ):
     return user
 
 
+def _login(environ, session, page=None):
+    auth = environ.get('HTTP_AUTHORIZATION', '').split()
+
+    if not auth or auth[0].lower() != 'basic':
+        raise koji.AuthError(
+            'Invalid authorization header.'
+        )
+
+    if len(auth) == 1:
+        raise koji.AuthError(
+            'Invalid basic header. No credentials provided.'
+        )
+    elif len(auth) > 2:
+        raise koji.AuthError(
+            'Invalid basic header. Credentials string should not contain spaces.'
+        )
+
+    try:
+        import base64
+        try:
+            auth_decoded = base64.b64decode(auth[1]).decode('utf-8')
+        except UnicodeDecodeError:
+            auth_decoded = base64.b64decode(auth[1]).decode('latin-1')
+        auth_parts = auth_decoded.partition(':')
+    except (TypeError, UnicodeDecodeError, binascii.Error):
+        raise koji.AuthError(
+            'Invalid basic header. Credentials not correctly base64 encoded.'
+        )
+
+    username, password = auth_parts[0], auth_parts[2]
+
+    session.opts.update(
+        user=username,
+        password=password
+    )
+
+    return session.login()
+
+
 def _gssapiLogin(environ, session, principal):
     options = environ['koji.options']
     wprinc = options['WebPrincipal']
@@ -149,9 +188,9 @@ def _assertLogin(environ):
                 raise koji.AuthError(
                     'could not login using principal: %s' % environ['koji.currentLogin'])
         else:
-            raise koji.AuthError(
-                'KojiWeb is incorrectly configured for authentication, '
-                'contact the system administrator')
+            if not _login(environ, environ['koji.session']):
+                raise koji.AuthError(
+                    'could not login using username: %s' % environ['koji.currentLogin'])
 
         # verify a valid authToken was passed in to avoid CSRF
         authToken = environ['koji.form'].getfirst('a', '')
@@ -278,9 +317,11 @@ def login(environ, page=None):
         username = principal
         authlogger.info('Successful Kerberos authentication by %s', username)
     else:
-        raise koji.AuthError(
-            'KojiWeb is incorrectly configured for authentication, contact the system '
-            'administrator')
+        username = environ.get('REMOTE_USER')
+        if not _login(environ, session, page):
+            raise koji.AuthError('could not login %s using basic auth' % username)
+
+        authlogger.info('Successful basic authentication by %s', username)
 
     _setUserCookie(environ, username)
     # To protect the session cookie, we must forceSSL

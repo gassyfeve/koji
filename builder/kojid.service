@@ -1,8 +1,7 @@
 [Unit]
 Description=Koji build server
 Documentation=https://docs.pagure.org/koji/server_howto/
-
-After=network.target
+After=network.target httpd.service
 
 [Service]
 ExecStart=/usr/sbin/kojid \
