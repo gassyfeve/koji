@@ -118,6 +118,9 @@ def _getUserCookie(environ):
 
 
 def _login(environ, session, page=None):
+    if _getUserCookie(environ):
+        return True
+
     auth = environ.get('HTTP_AUTHORIZATION', '').split()
 
     if not auth or auth[0].lower() != 'basic':
